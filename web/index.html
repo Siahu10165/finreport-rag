@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>财报问答知识库 · 保险与券商 2025 年报</title>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#ffffff; --line:#e3e6ea; --text:#1a1d21; --muted:#6b7280;
+  --accent:#1f4e79; --accent-soft:#e8f0f8; --warn:#b45309; --ok:#047857;
+  --tab:#f0f2f5; --radius:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--text); line-height:1.65;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  font-size:14px;
+}
+a{color:var(--accent)}
+.wrap{max-width:1240px;margin:0 auto;padding:20px 24px 60px}
+header{border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:20px}
+h1{font-size:20px;font-weight:650;letter-spacing:.2px}
+.sub{color:var(--muted);font-size:13px;margin-top:6px}
+.stats{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--muted)}
+.stats b{color:var(--accent);font-weight:600}
+.ask{display:flex;gap:10px;margin:18px 0}
+input[type=text]{
+  flex:1;padding:11px 14px;border:1px solid var(--line);border-radius:var(--radius);
+  font-size:14px;font-family:inherit;background:var(--panel);color:var(--text);
+}
+input[type=text]:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+button{
+  padding:11px 22px;border:none;border-radius:var(--radius);background:var(--accent);
+  color:#fff;font-size:14px;font-weight:550;cursor:pointer;font-family:inherit;white-space:nowrap;
+}
+button:hover{background:#17405f}
+button:disabled{background:#9aabba;cursor:not-allowed}
+.examples{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.chip{
+  padding:5px 12px;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  font-size:12.5px;cursor:pointer;color:var(--muted);user-select:none;
+}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.cols{display:grid;grid-template-columns:1.05fr .95fr;gap:18px;align-items:start}
+@media(max-width:980px){.cols{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.panel>h2{
+  font-size:13.5px;font-weight:600;padding:11px 15px;border-bottom:1px solid var(--line);
+  background:var(--tab);display:flex;justify-content:space-between;align-items:center;
+}
+.panel>h2 .cnt{color:var(--muted);font-weight:400;font-size:12.5px}
+.body{padding:15px;max-height:74vh;overflow-y:auto}
+.hint{color:var(--muted);font-size:13px;text-align:center;padding:40px 20px}
+.ans{white-space:pre-wrap;line-height:1.8;font-size:14px}
+.ans .cite{
+  display:inline-block;min-width:17px;height:17px;line-height:17px;text-align:center;
+  background:var(--accent-soft);color:var(--accent);border-radius:4px;font-size:11px;
+  font-weight:600;cursor:pointer;margin:0 2px;vertical-align:1px;padding:0 3px;
+}
+.ans .cite:hover{background:var(--accent);color:#fff}
+.err{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;padding:10px 13px;border-radius:6px;font-size:13px;margin-bottom:12px}
+.chunk{border:1px solid var(--line);border-radius:6px;margin-bottom:10px;overflow:hidden;background:#fff}
+.chunk.hl{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.chunk .hd{
+  padding:9px 12px;background:var(--tab);cursor:pointer;display:flex;gap:9px;align-items:center;
+  font-size:12.5px;flex-wrap:wrap;
+}
+.chunk .hd:hover{background:#e8ebef}
+.no{
+  background:var(--accent);color:#fff;width:19px;height:19px;line-height:19px;text-align:center;
+  border-radius:4px;font-size:11px;font-weight:600;flex-shrink:0;
+}
+.co{font-weight:600;color:var(--accent)}
+.meta{color:var(--muted);font-size:12px}
+.kind{background:#fff;border:1px solid var(--line);border-radius:3px;padding:1px 6px;font-size:11px;color:var(--muted)}
+.rk{margin-left:auto;font-size:11px;color:var(--muted);font-family:ui-monospace,Consolas,monospace}
+.txt{padding:11px 13px;font-size:13px;white-space:pre-wrap;line-height:1.7;color:#33383f;display:none;border-top:1px solid var(--line)}
+.chunk.open .txt{display:block}
+.mark{background:#fff3c4;padding:0 1px}
+.act{padding:8px 13px;border-top:1px solid var(--line);background:#fafbfc;display:flex;gap:8px;flex-wrap:wrap}
+.act button{padding:4px 11px;font-size:12px;background:#fff;color:var(--accent);border:1px solid var(--accent)}
+.act button:hover{background:var(--accent-soft)}
+.loading{color:var(--muted);font-size:13px;padding:14px 0}
+.spin{display:inline-block;width:11px;height:11px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-1px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+pre.orig{white-space:pre-wrap;font-size:12.5px;line-height:1.7;max-height:340px;overflow:auto;background:#fafbfc;padding:11px;border-radius:6px;border:1px solid var(--line);margin:9px 0 0}
+@media(max-width:600px){.wrap{padding:14px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>财报问答知识库 · 保险与券商 2025 年报</h1>
+  <div class="sub">19 家上市公司（保险 4 家 + 券商 15 家）· 混合检索（向量 + BM25，RRF 融合）· 每条答案标注出处，可点回原文</div>
+  <div class="stats" id="stats">加载中…</div>
+</header>
+
+<div class="ask">
+  <input type="text" id="q" placeholder="例如：中信证券2025年营业收入是多少？" autocomplete="off">
+  <button id="go" onclick="ask()">提问</button>
+</div>
+<div class="examples" id="ex"></div>
+
+<div class="cols">
+  <div class="panel">
+    <h2>回答<span class="cnt" id="acnt"></span></h2>
+    <div class="body" id="ans"><div class="hint">输入问题开始提问。答案中的 [n] 可点击定位到右侧来源。</div></div>
+  </div>
+  <div class="panel">
+    <h2>召回的原文片段<span class="cnt" id="ccnt"></span></h2>
+    <div class="body" id="chunks"><div class="hint">这里会显示向量与 BM25 混合召回的原文块。</div></div>
+  </div>
+</div>
+</div>
+
+<script>
+const EXAMPLES = [
+  "中信证券2025年营业收入是多少？同比增长多少？",
+  "国泰海通2025年归母净利润是多少？",
+  "中国人寿2025年的一年新业务价值是多少？",
+  "本次收录的券商中，2025年营业收入最高的是哪家公司？",
+  "中国太保2025年集团内含价值是多少？",
+  "中国人寿2025年末的综合偿付能力充足率是多少？"
+];
+
+document.getElementById('ex').innerHTML =
+  EXAMPLES.map(e=>`<span class="chip" onclick="document.getElementById('q').value='${e.replace(/'/g,"&#39;")}';ask()">${e}</span>`).join('');
+
+fetch('/api/stats').then(r=>r.json()).then(d=>{
+  const i=d.index||{}, e=d.extract||{};
+  document.getElementById('stats').innerHTML =
+    `<span>切块 <b>${(i.n_chunks||0).toLocaleString()}</b> 个（正文 ${(i.n_text||0).toLocaleString()} / 表格 ${(i.n_table||0).toLocaleString()}）</span>`+
+    `<span>公司 <b>${(i.companies||[]).length}</b> 家</span>`+
+    `<span>原文 <b>${(e.pages||0).toLocaleString()}</b> 页 / <b>${((e.chars||0)/1e4).toFixed(0)}</b> 万字</span>`+
+    `<span>表格 <b>${(e.tables||0).toLocaleString()}</b> 张</span>`+
+    `<span>切块参数 <b>${i.chunk_size}</b> 字 / 重合 <b>${i.chunk_overlap}</b></span>`+
+    `<span>向量模型 <b>${(i.embed_model||'').split(/[\\/]/).pop()}</b></span>`;
+}).catch(()=>{document.getElementById('stats').textContent=''});
+
+let chunks=[], lastAnswer='';
+
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+async function ask(){
+  const q=document.getElementById('q').value.trim();
+  if(!q)return;
+  const btn=document.getElementById('go'); btn.disabled=true;
+  document.getElementById('ans').innerHTML='<div class="loading"><span class="spin"></span>检索并生成回答…</div>';
+  document.getElementById('chunks').innerHTML='';
+  document.getElementById('ccnt').textContent='';
+  document.getElementById('acnt').textContent='';
+  try{
+    const r=await fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,topk:8})});
+    const d=await r.json();
+    if(d.error && !d.chunks){document.getElementById('ans').innerHTML='<div class="err">'+esc(d.error)+'</div>';return;}
+    chunks=d.chunks||[];
+    renderChunks(d);
+    renderAnswer(d);
+  }catch(e){
+    document.getElementById('ans').innerHTML='<div class="err">请求失败：'+esc(e.message)+'</div>';
+  }finally{btn.disabled=false}
+}
+
+function renderAnswer(d){
+  const box=document.getElementById('ans');
+  document.getElementById('acnt').textContent=(d.used&&d.used.length)?('引用 '+d.used.length+' 处'):'';
+  let html='';
+  if(d.error) html+='<div class="err">'+esc(d.error)+'</div>';
+  if(!d.answer){
+    html+='<div class="hint">未启用回答生成（可在 .env 配置 DEEPSEEK_API_KEY）。下面是检索到的原文，可直接阅读右侧片段。</div>';
+  }else{
+    lastAnswer=d.answer;
+    // 把 [n] 变成可点击角标
+    html='<div class="ans">'+esc(d.answer).replace(/\[(\d{1,2})\]/g,(m,n)=>{
+      const i=+n;
+      if(i>=1&&i<=chunks.length) return '<span class="cite" onclick="focusChunk('+i+')">'+i+'</span>';
+      return m;
+    })+'</div>';
+    if(d.hallucinated_cites&&d.hallucinated_cites.length){
+      html+='<div class="err" style="margin-top:12px">答案引用了不存在的来源编号 '+d.hallucinated_cites.join(', ')+'，已在页面上隐藏。</div>';
+    }
+  }
+  box.innerHTML=html;
+}
+
+function renderChunks(d){
+  document.getElementById('ccnt').textContent=
+    '向量召回 '+d.n_candidate_vector+' / BM25 召回 '+d.n_candidate_bm25+' → RRF 融合 '+d.chunks.length;
+  const box=document.getElementById('chunks');
+  if(!d.chunks.length){box.innerHTML='<div class="hint">没有召回任何片段。</div>';return;}
+  box.innerHTML=d.chunks.map((c,i)=>{
+    const r=c.retrieval||{};
+    const rk=(r.vector_rank?'V'+r.vector_rank:'')+(r.bm25_rank?' B'+r.bm25_rank:'');
+    return `<div class="chunk" id="c${c.idx}">
+      <div class="hd" onclick="this.parentNode.classList.toggle('open')">
+        <span class="no">${c.idx}</span>
+        <span class="co">${esc(c.company)}</span>
+        <span class="meta">${esc(c.section||'未标注章节')} · 第${c.page}页</span>
+        <span class="kind">${c.kind==='table'?'表格':'正文'}</span>
+        <span class="rk">${rk}</span>
+      </div>
+      <div class="txt">${esc(c.text)}</div>
+      <div class="act">
+        <button onclick="showOriginal('${c.code}',${c.page},${c.idx})">点回原文第 ${c.page} 页</button>
+        <button onclick="this.closest('.chunk').classList.toggle('open')">展开/收起片段</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function focusChunk(i){
+  document.querySelectorAll('.chunk.hl').forEach(e=>e.classList.remove('hl'));
+  const el=document.getElementById('c'+i);
+  if(el){el.classList.add('hl');el.classList.add('open');el.scrollIntoView({behavior:'smooth',block:'center'});}
+}
+
+async function showOriginal(code,page,idx){
+  const el=document.getElementById('c'+idx);
+  let box=el.querySelector('pre.orig');
+  if(box){box.remove();return;}
+  const r=await fetch(`/api/page?code=${code}&page=${page}`);
+  const d=await r.json();
+  box=document.createElement('pre'); box.className='orig';
+  if(d.error){box.textContent=d.error;}
+  else{
+    box.textContent=d.text||'（本页无正文）';
+    const head=document.createElement('div');
+    head.className='meta';
+    head.style.marginTop='9px';
+    head.textContent=`${d.name}（${d.code}） ${d.section||'未标注章节'} · 第 ${d.page} 页${d.tables&&d.tables.length?' · 本页含 '+d.tables.length+' 张表':''}`;
+    box.parentNode.insertBefore(head,box);
+  }
+  el.querySelector('.act').after(box);
+}
+
+document.getElementById('q').addEventListener('keydown',e=>{if(e.key==='Enter')ask()});
+</script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+# 本机密钥与产物不入库
+.env
+.env.*
+!.env.example
+
+# 财报 PDF 体积大且有版权，不入库（只保留下载脚本）
+data/pdf/
+data/text/
+data/index/
+data/logs/
+
+# 截图与中间产物
+shots/*.tmp
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+*.egg-info/
+.pytest_cache/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 模型权重（改用在线 API 后已不需要，保留规则防止误提交）
+models/
+*.onnx
+*.safetensors
+*.bin
+
+# Node（截图脚本用的 puppeteer-core）
+node_modules/
+package-lock.json
+
+# 本地密钥的备份文件
+*.env.bak
+.env.local

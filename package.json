@@ -1,0 +1,12 @@
+{
+  "name": "finreport-rag-shots",
+  "version": "1.0.0",
+  "private": true,
+  "description": "问答页无头截图脚本（puppeteer-core + 系统已装浏览器，不下载 Chromium）",
+  "scripts": {
+    "shot": "node scripts/shot.js --port 8000"
+  },
+  "dependencies": {
+    "puppeteer-core": "^23.0.0"
+  }
+}

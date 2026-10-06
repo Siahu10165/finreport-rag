@@ -1,0 +1,15 @@
+# ---- 基础依赖 ----
+# 向量化走硅基流动在线 API，所以**不需要 torch / sentence-transformers /
+# modelscope**——这是本方案相比本地跑模型最大的省事之处：
+# 不用挑 CUDA 轮子、不用管显存、16GB 内存的小机器也毫无压力。
+
+requests>=2.31          # 调Embedding API + 下载年报 PDF
+pymupdf>=1.24           # PDF 文本与坐标提取（比 pdfplumber 抽表可靠得多）
+jieba>=0.42             # BM25 中文分词
+numpy>=1.26             # 向量矩阵运算
+flask>=3.0              # 问答页后端
+python-dotenv>=1.0      # 读 .env
+
+# pdfplumber 是早期方案留下的，02_extract.py 现在走 PyMuPDF 坐标法，
+# 已不再使用。保留在注释里以备需要时对照。
+# pdfplumber>=0.11
