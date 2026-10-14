@@ -146,6 +146,87 @@ def hit_expect_all(answer: str, expect_all: list[str]) -> tuple[bool, list[str],
     return (not miss), hit, miss
 
 
+# ---------------------------------------------------------------- 三档判定
+GRADES = {
+    "正确": "答案的关键值全部命中，且检索召回了目标公司与章节",
+    "部分正确": "命中一部分关键值，或召回了目标公司但数值不全/精度不同",
+    "错误": "关键值一个都没命中，或召回了错误的公司（看起来合理但结论错）",
+}
+
+
+def grade_one(
+    spec: dict,
+    answer: str,
+    recall_ok: bool,
+    gen_ok: bool,
+    expect_hit: list[str],
+    expect_missed: list[str],
+    companies_recalled: list[str],
+) -> tuple[str, list[str]]:
+    """给单题下三档结论，并返回逐条证据理由。
+
+    判定顺序有讲究——先看「检索层」，再看「生成层」，
+    因为检索错了的时候生成层的对错没有意义（模型可能靠语料知识蒙对）。
+    """
+    reasons: list[str] = []
+    is_reject = bool(spec.get("expect_reject"))
+
+    # 调用失败 ≠ 答错。必须分开，否则会把「模型没返回内容」误记成「模型答错」。
+    if not (answer or "").strip():
+        reasons.append("❌ 大模型未返回任何内容（调用层失败，不是答错）")
+        return "错误", reasons
+
+    # 陷阱题：期望模型明确拒答
+    if is_reject:
+        low = normalize_num(answer)
+        said_no = any(
+            normalize_num(w) in low
+            for w in ("未提及", "未披露", "没有", "无法", "不包含", "不含",
+                      "不提供", "未预测", "未涉及", "无法确定", "不能确定")
+        )
+        # 同时检查是否编造了具体数字（有数字但声称没提到 = 自相矛盾）
+        has_number = bool(re.search(r"\d+\.?\d*\s*亿", answer))
+        if said_no and not has_number:
+            reasons.append("模型明确回答「资料中未提及」，且未给出任何预测数字 → 正确")
+            return "正确", reasons
+        if said_no and has_number:
+            reasons.append("模型嘴上说未提及，但文中有具体金额，自相矛盾 → 错误")
+            return "错误", reasons
+        reasons.append(
+            "模型没有明确说「未提及」，而是给出了具体数字 → 幻觉"
+        )
+        return "错误", reasons
+
+    # 检索层证据
+    if not recall_ok:
+        reasons.append(
+            f"检索层失败：未召回目标公司（实际召回 {companies_recalled}），"
+            "后面的生成再合理也不成立"
+        )
+    else:
+        reasons.append(f"检索层命中：召回 {companies_recalled}")
+
+    # 生成层证据
+    if spec.get("expect_all"):
+        if expect_missed:
+            reasons.append(
+                f"生成层部分正确：命中 {expect_hit}，缺失 {expect_missed}"
+                + ("（关键值缺失 → 判部分正确）" if expect_hit else "")
+            )
+            if not expect_hit:
+                reasons.append("关键值一个都没命中 → 判错误")
+                return "错误", reasons
+            return ("部分正确" if recall_ok else "错误"), reasons
+        reasons.append(f"生成层全部命中：{expect_hit} → 判正确")
+        return "正确", reasons
+
+    if expect_hit:
+        reasons.append(f"生成层命中期望值：{expect_hit}")
+        return "正确", reasons
+    reasons.append("生成层未命中任何期望值 → 判错误")
+    return "错误", reasons
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--topk", type=int, default=8)
@@ -256,29 +337,70 @@ def main() -> int:
             "elapsed_s": round(time.time() - t0, 1),
         }
 
-        # 记录错在哪：分检索层与生成层
-        reasons = []
-        if not recall_ok:
-            reasons.append(
-                f"检索漏掉了 {missed_companies}，只召回了 {companies}"
-            )
-        if not gen_ok:
-            if missing:
-                reasons.append(f"生成答案缺少关键值 {missing}")
-            else:
-                reasons.append("生成答案未命中任何期望值")
-        rec["fail_reasons"] = reasons
+        # 三档判定 + 逐条证据理由（正确/部分正确/错误）
+        grade, evidence = grade_one(
+            spec, answer, recall_ok, gen_ok, hits, missing, companies
+        )
+        # LLM 调用失败要写进证据，否则「答错」与「没答」混为一谈
+        if err and "未启用" not in str(err):
+            evidence = list(evidence) + [f"LLM 调用异常：{err}"]
+        rec["grade"] = grade
+        rec["evidence"] = evidence
+        rec["recall_layer"] = "通过" if recall_ok else "失败"
+        rec["gen_layer"] = "通过" if gen_ok else "失败"
 
-        mark = "对" if rec["correct"] else ("错-检索" if not recall_ok else "错-生成")
+        # 跨公司全景题：逐公司列出「覆盖 / 缺失」，不能只给一个总布尔值
+        if spec["kind"] == "跨公司全景":
+            targets = need_companies or _panorama_targets(spec)
+            # cited 存的是**块序号**（[1] [2] …），不是 chunk_id。
+            # 早期版本拿 cited 去比 chunk_id 字符串，永远匹配不上，
+            # 导致「被答案引用」全是「否」，连✅的题也显示没引用。
+            cited_set = set(cited or [])
+            coverage = []
+            for comp in targets:
+                # 注意：chunks 是检索器返回的原始切块，没有 idx 字段
+                # （idx 只存在于 rec["chunks"] 那个列表里），要自己按序号枚举。
+                idxs = [
+                    i for i, c in enumerate(chunks, start=1)
+                    if c["company"] == comp
+                ]
+                coverage.append({
+                    "company": comp,
+                    "covered": comp in companies,
+                    "n_chunks": len(idxs),
+                    "chunk_idxs": idxs,
+                    "cited_in_answer": any(i in cited_set for i in idxs),
+                })
+            rec["per_company_coverage"] = {
+                "targets": targets,
+                "coverage": coverage,
+                "covered": sum(1 for c in coverage if c["covered"]),
+                "missing": [c["company"] for c in coverage if not c["covered"]],
+                # 库里实际存在但没被点名、也没召回的公司
+                "not_targeted_but_relevant": [
+                    comp for comp in companies if comp not in targets
+                ],
+            }
+
+        # fail_reasons 保留给既有文档使用；判定理由统一放 evidence
+        rec["fail_reasons"] = evidence
+
+        mark = {"正确": "✅ 正确", "部分正确": "⚠️ 部分正确", "错误": "❌ 错误"}[grade]
         print(f"    -> {mark} | 召回 {companies} | {rec['elapsed_s']}s"
-              + (f" | {reasons[0][:60]}" if reasons else ""), flush=True)
+              + (f" | {evidence[0][:60]}" if evidence else ""), flush=True)
         results.append(rec)
 
-    n_ok = sum(1 for x in results if x["correct"])
+    # 三档统计：不用单一正确率掩盖「部分正确」这类中间态
+    n_ok = sum(1 for x in results if x["grade"] == "正确")
+    n_part = sum(1 for x in results if x["grade"] == "部分正确")
+    n_bad = sum(1 for x in results if x["grade"] == "错误")
     summary = {
         "n_questions": len(results),
         "n_correct": n_ok,
+        "n_partial": n_part,
+        "n_wrong": n_bad,
         "accuracy": round(n_ok / max(1, len(results)), 3),
+        "grade_definitions": GRADES,
         "by_kind": {},
         "recall_accuracy": round(
             sum(1 for x in results if x["recall_ok"]) / max(1, len(results)), 3
@@ -288,10 +410,12 @@ def main() -> int:
         "llm_enabled": llm_ok,
     }
     for rec in results:
-        s = summary["by_kind"].setdefault(rec["kind"], {"n": 0, "ok": 0, "recall_ok": 0})
+        s = summary["by_kind"].setdefault(
+            rec["kind"], {"n": 0, "正确": 0, "部分正确": 0, "错误": 0, "recall_ok": 0}
+        )
         s["n"] += 1
         s["recall_ok"] += int(rec["recall_ok"])
-        s["ok"] += int(rec["correct"])
+        s[rec["grade"]] = s.get(rec["grade"], 0) + 1
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -299,10 +423,13 @@ def main() -> int:
         json.dumps({"summary": summary, "results": results}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    print(f"\n[{now_str()}] ===== 评测完成：{n_ok}/{len(results)} 题答对 =====")
+    print(f"\n[{now_str()}] ===== 评测完成："
+          f"正确 {n_ok} / 部分正确 {n_part} / 错误 {n_bad} "
+          f"（共 {len(results)} 题）=====")
     print(f"    检索层命中率 {summary['recall_accuracy']*100:.0f}%")
     for k, v in summary["by_kind"].items():
-        print(f"    {k}: {v['ok']}/{v['n']}（检索命中 {v['recall_ok']}/{v['n']}）")
+        print(f"    {k}: 正确 {v['正确']} / 部分正确 {v.get('部分正确', 0)} "
+              f"/ 错误 {v.get('错误', 0)}（共 {v['n']}，检索命中 {v['recall_ok']}）")
     print(f"明细已存 {out_path}")
     return 0
 
@@ -322,7 +449,11 @@ def _guess_companies(q: str) -> list[str]:
         "华泰证券": "华泰证券", "华泰": "华泰证券",
         "中国太保": "中国太保", "太保": "中国太保",
         "中国人保": "中国人保", "人保": "中国人保",
-        "国泰君安": "国泰君安", "国泰海通": "国泰海通", "国泰": "国泰海通",
+        # 库里登记名是「国泰君安」（代码 601211），但该公司 2025 年完成合并重组，
+        # 年报正文自称「国泰海通」。三种写法都归到库里真实存在的名字上，
+        # 否则 `_guess_companies` 会返回「国泰海通」而召回列表里是「国泰君安」，
+        # 被误判成「检索漏掉了目标公司」。
+        "国泰海通": "国泰君安", "国泰君安": "国泰君安", "国泰": "国泰君安",
         "广发证券": "广发证券", "广发": "广发证券",
         "中国银河": "中国银河", "银河": "中国银河",
         "中信建投": "中信建投",
@@ -341,6 +472,27 @@ def _guess_companies(q: str) -> list[str]:
         if k in q and names[k] not in out:
             out.append(names[k])
     return out
+
+
+# 跨公司「排名类」题目的应覆盖对象。
+# 「哪家营收最高」这类题问句里没点名公司，但要在全部券商间比较——
+# 判定时必须知道「应该覆盖谁」，否则只能给一个笼统的 true/false。
+PANORAMA_RANK_BROKERS = [
+    "中信证券", "国泰君安", "华泰证券", "广发证券", "中国银河", "招商证券",
+    "申万宏源", "中信建投", "国信证券", "东吴证券", "浙商证券",
+    "长江证券", "国金证券", "国元证券", "中金公司",
+]
+
+
+def _panorama_targets(spec: dict) -> list[str]:
+    """推断跨公司题的「应覆盖对象」列表。"""
+    q = spec["q"]
+    named = _guess_companies(q)
+    if named:
+        return named
+    if "券商" in q or "营业收入最高" in q:
+        return list(PANORAMA_RANK_BROKERS)
+    return []
 
 
 if __name__ == "__main__":

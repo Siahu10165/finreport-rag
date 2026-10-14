@@ -235,13 +235,25 @@ def build_vectors(
 
     # ---- 断点续传：分片目录 ----
     parts_dir = INDEX_DIR / "_parts"
-    writer = PartWriter(parts_dir, embedder.dimensions)
+    # 切块指纹：前若干块的 id+文本哈希。用来判断旧分片是否还对得上。
+    # 踩过的坑：切块数从 15,544 变到 16,392（新增一家公司），batch_size 仍是 16，
+    # 只比 batch_size 会把旧分片误当成可复用——而它们对齐的是旧的切块顺序，
+    # 向量与切块整体错位，检索全是噪声且**不报错**。
+    import hashlib
 
-    # 切块参数变了就必须重来：分片与块序号是对应的，
-    # 拿旧分片配新块会彻底错位
-    if writer.meta.get("batch_size") != bs or not resume:
+    h = hashlib.sha256()
+    for c in chunks[:200]:
+        h.update(c["chunk_id"].encode("utf-8"))
+    for c in chunks:
+        h.update(c["chunk_id"].encode("utf-8"))
+    signature = f"{len(chunks)}:{h.hexdigest()[:16]}"
+    writer = PartWriter(parts_dir, embedder.dimensions, signature=signature)
+    log(f"切块指纹 {signature}（{len(chunks)} 块）")
+
+    # 切块参数或内容变了就必须重来：分片与块序号是一一对应的
+    if not writer.is_compatible(bs) or not resume:
         if writer.done_batches():
-            log("已有分片与当前配置不一致，重置分片（不重置会与新块错位）")
+            log("已有分片与当前切块不一致，重置分片（不重置会与新块错位）")
         writer.reset(bs)
     else:
         done = writer.done_batches()

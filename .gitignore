@@ -41,3 +41,7 @@ package-lock.json
 # 本地密钥的备份文件
 *.env.bak
 .env.local
+
+# 文档工具日志（不入库）
+Typora_Hook_Log.txt
+*.tmp

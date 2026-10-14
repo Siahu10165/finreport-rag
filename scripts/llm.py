@@ -57,9 +57,17 @@ def call_deepseek(question: str, chunks: list[dict], timeout: int = 120) -> dict
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": build_user_prompt(question, chunks)},
+            # 预填空 assistant 段：deepseek-flash 是**推理模型**，
+            # 响应里 content 与 reasoning_content 共享 max_tokens 预算。
+            # 不预填时长题目会思考很久把预算吃光 → finish_reason='length'
+            # 且 content 返回空字符串——**HTTP 200、不报错、答案却是空的**
+            # （实测第 8 题跨公司对比题就栽在这里，评测一度把「调用失败」
+            # 误判成「模型答错」）。预填后它直接续写答案，稳且快。
+            {"role": "assistant", "content": ""},
         ],
         "temperature": 0.1,  # 财报问答要稳，别发挥
-        "max_tokens": 1500,
+        # 给足预算：推理内容与正文共享这个数。实测 1500 会不够。
+        "max_tokens": 4000,
     }
     req = urllib.request.Request(
         f"{DEEPSEEK_BASE_URL.rstrip('/')}/chat/completions",
@@ -79,7 +87,22 @@ def call_deepseek(question: str, chunks: list[dict], timeout: int = 120) -> dict
     except Exception as e:  # noqa: BLE001
         return {"answer": "", "used": [], "raw": "", "error": f"请求失败：{e}"}
 
-    answer = (data["choices"][0]["message"]["content"] or "").strip()
+    choice = (data.get("choices") or [{}])[0]
+    msg = choice.get("message") or {}
+    answer = (msg.get("content") or "").strip()
+    reasoning = (msg.get("reasoning_content") or "").strip()
+    if not answer:
+        # 静默返回空是最难查的失败模式，必须显式报出来，
+        # 否则评测会把「调用失败」误判成「模型答错」。
+        return {
+            "answer": "",
+            "used": [],
+            "raw": "",
+            "error": (
+                f"模型返回空内容（finish_reason={choice.get('finish_reason')}，"
+                f"reasoning {len(reasoning)} 字）——推理模型把 max_tokens 吃光了"
+            ),
+        }
     # 出口校验：只保留真实存在的引用编号
     cited = {int(x) for x in re.findall(r"\[(\d{1,2})\]", answer)}
     valid = {c for c in cited if 1 <= c <= len(chunks)}

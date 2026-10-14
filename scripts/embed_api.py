@@ -261,23 +261,43 @@ class PartWriter:
     每批结果立刻存成一个 .npy 小文件，重跑时扫目录跳过已完成的批次。
     """
 
-    def __init__(self, parts_dir: Path, dim: int):
+    def __init__(self, parts_dir: Path, dim: int, signature: str = ""):
         self.dir = Path(parts_dir)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.dim = dim
+        # signature：切块内容指纹。用来判断旧分片能不能复用。
+        self.signature = signature
         self.meta_path = self.dir / "_progress.json"
-        self.meta = {"batch_size": 0, "done_batches": []}
+        self.meta = {"batch_size": 0, "signature": "", "done_batches": []}
         if self.meta_path.exists():
             try:
                 self.meta = json.loads(self.meta_path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 pass
 
+    def is_compatible(self, batch_size: int) -> bool:
+        """旧分片能否复用。
+
+        必须同时匹配 batch_size **和** 切块指纹。
+        只比 batch_size 会踩很隐蔽的坑：切块数从 15,544 变成 16,392（加了新公司），
+        batch_size 仍是 16，于是旧分片被"复用"，但它对齐的是**旧的切块顺序**——
+        结果向量与切块整体错位，检索全是噪声，而且**不报任何错**。
+        实测踩过：1025 批算完只有 16,384 条向量，与 16,392 块差 8 条。
+        """
+        return (
+            self.meta.get("batch_size") == batch_size
+            and (not self.signature or self.meta.get("signature") == self.signature)
+        )
+
     def reset(self, batch_size: int) -> None:
-        """清空旧分片（切块参数变了必须重来，否则维度/内容都对不上）。"""
+        """清空旧分片（切块参数或内容变了必须重来）。"""
         for p in self.dir.glob("*.npy"):
             p.unlink()
-        self.meta = {"batch_size": batch_size, "done_batches": []}
+        self.meta = {
+            "batch_size": batch_size,
+            "signature": self.signature,
+            "done_batches": [],
+        }
         self.save()
 
     def done_batches(self) -> set[int]:
