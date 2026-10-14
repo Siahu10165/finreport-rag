@@ -45,3 +45,7 @@ package-lock.json
 # 文档工具日志（不入库）
 Typora_Hook_Log.txt
 *.tmp
+
+# 截图脚本的临时文件与旧图
+shots/_shoot.js
+shots/_old/

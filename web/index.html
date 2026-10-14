@@ -91,7 +91,7 @@ pre.orig{white-space:pre-wrap;font-size:12.5px;line-height:1.7;max-height:340px;
 <div class="wrap">
 <header>
   <h1>财报问答知识库 · 保险与券商 2025 年报</h1>
-  <div class="sub">19 家上市公司（保险 4 家 + 券商 15 家）· 混合检索（向量 + BM25，RRF 融合）· 每条答案标注出处，可点回原文</div>
+  <div class="sub" id="sub">上市公司年报（混合检索：向量 + BM25，RRF 融合）· 每条答案标注出处，可点回原文</div>
   <div class="stats" id="stats">加载中…</div>
 </header>
 
@@ -128,6 +128,11 @@ document.getElementById('ex').innerHTML =
 
 fetch('/api/stats').then(r=>r.json()).then(d=>{
   const i=d.index||{}, e=d.extract||{};
+  // 公司家数按实际索引动态填，不写死在文案里——
+  // 之前「19 家」写死在 HTML 里，加了公司后页头就与数据不一致了。
+  const n=(i.companies||[]).length;
+  document.getElementById('sub').textContent =
+    `${n} 家上市公司 · 混合检索（向量 + BM25，RRF 融合）· 每条答案标注出处，可点回原文`;
   document.getElementById('stats').innerHTML =
     `<span>切块 <b>${(i.n_chunks||0).toLocaleString()}</b> 个（正文 ${(i.n_text||0).toLocaleString()} / 表格 ${(i.n_table||0).toLocaleString()}）</span>`+
     `<span>公司 <b>${(i.companies||[]).length}</b> 家</span>`+
